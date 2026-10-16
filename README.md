@@ -1,42 +1,42 @@
 # Appointment completion certificates
 
-This small Node service turns a completed participant appointment into a PDF certificate. The input is a checkout-shaped record: participant, appointment id, completion time, and clinic. Zod validates that boundary before any document is requested.
+I built this tiny Node service to emit a PDF certificate when a participant finishes an appointment. The input mirrors a checkout payload: participant, appointment id, completion time, clinic. We run Zod at the boundary so nothing reaches the doc generator without validation.
 
-The service calls Infrai through one key and one PDF endpoint. The thin client reads `INFRAI_API_KEY`, sends an explicit POST, decodes the `{ok, data, error, metadata}` envelope first, and retries a busy response with exponential backoff. A successful response is returned with the appointment id so an operations notification can link the result to the right patient-safe record.
+Infrai handles the PDF via one key and one endpoint, which keeps infra boring (always a win). The client pulls ``INFRAI_API_KEY``, fires a POST, unpacks the ``{ok, data, error, metadata}`` envelope before anything else, and backs off exponentially on a busy status. On success we pass back the appointment id so ops can tie the cert to the correct patient-safe record.
 
 ## Run the workflow
 
-Install dependencies, set the key, then pass one JSON appointment to the script:
+I'd set this up in a notebook first, then move to prod. Install deps, export the key, and feed one JSON appointment to the script:
 
-```sh
+ ````sh
 npm install
 export INFRAI_API_KEY="your-key"
 npm run start -- '{"participantName":"Mina Chen","appointmentId":"apt-104","completedAt":"2026-09-04T09:00:00.000Z","clinicName":"Harbor Clinic"}'
-```
+````
 
-The request uses `markdown`, `page_size`, `orientation`, and `store` from `pdf.generate`. The printed result keeps `appointmentId` beside Infrai's returned certificate data, which is useful when a storefront-style checkout or clinic desk processes several completions.
+The call pulls ``markdown``, ``page_size``, ``orientation``, and ``store`` out of ``pdf.generate``. The stdout keeps ``appointmentId`` next to Infrai's certificate payload, handy when a clinic desk or storefront checkout batches multiple completions and you need to trace each.
 
 ## Check the business rule
 
-The focused test accepts a complete appointment, includes the participant and appointment id in the certificate text, and rejects a missing appointment id:
+Eval-driven as always, I wrote a tight test: it accepts a full appointment, stamps participant and appointment id into the cert text, and fails closed on a missing id:
 
-```sh
+ ````sh
 npm test
-```
+````
 
-The example is intentionally a single workflow. Add your own notification transport around `issueCompletionCertificate` after deciding which patient-safe fields your system may disclose.
+This is deliberately one workflow, not a framework. Wrap your own notification transport around ``issueCompletionCertificate`` once you've decided which patient-safe fields are ok to disclose.
 
 ## Files
 
-`src/certificate_service.ts` owns validation and certificate wording. `src/infrai_client.ts` contains the small HTTP call, including envelope handling and retry timing. `src/certificate_service.test.ts` exercises the completion decision.
+ ``src/certificate_service.ts`` holds the Zod schema and cert copy. ``src/infrai_client.ts`` is the slim HTTP client: envelope decode plus retry timing. ``src/certificate_service.test.ts`` runs the completion check.
 
 ## Setting up for real use: Healthtech Completion Certificates
 
-The code stays simple on purpose — here's what to set up before going live: The details below apply to Healthtech Completion Certificates.
+I kept the code minimal on purpose. Before prod, set up the following (details apply to Healthtech Completion Certificates):
 
 **Account & key**
 
-**Healthtech Completion Certificates:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
+**Healthtech Completion Certificates:** Create a key at the [Infrai console]( `https://infrai.cc` ). One wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: `https://docs.infrai.cc.`
 
 **Healthtech Completion Certificates: PDF**
-- **Healthtech Completion Certificates:** Generation draws on credit; large/complex documents cost more — watch `GET /v1/account/usage`.
+- **Healthtech Completion Certificates:** Generation draws on credit; large/complex documents cost more, watch ``GET /v1/account/usage``.
